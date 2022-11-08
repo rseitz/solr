@@ -89,6 +89,7 @@ import org.apache.solr.search.CollapsingQParserPlugin;
 import org.apache.solr.search.ExtendedQuery;
 import org.apache.solr.search.QParser;
 import org.apache.solr.search.QueryParsing;
+import org.apache.solr.search.QueryUtils;
 import org.apache.solr.search.SolrIndexSearcher;
 import org.apache.solr.search.SortSpec;
 import org.apache.solr.search.SyntaxError;
@@ -594,6 +595,16 @@ public class QueryElevationComponent extends SearchComponent implements SolrCore
     }
 
     Set<Query> excludeSet = getTaggedQueries(rb, excludeTags);
+
+    // TODO: refactoring option 1 -- static method in QueryUtils
+    excludeSet = QueryUtils.getTaggedQueries(rb.req, excludeTags);
+
+    // TODO: refactoring option 2 -- default method on SolrQueryRequest
+    excludeSet = rb.req.getTaggedQueries(excludeTags);
+
+    // TODO: refactoring option 3 -- method on ResponseBuilder
+    excludeSet = rb.getTaggedQueries(excludeTags);
+
     if (excludeSet.isEmpty()) {
       // no filters were tagged
       return;

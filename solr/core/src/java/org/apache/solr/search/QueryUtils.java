@@ -19,7 +19,10 @@ package org.apache.solr.search;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanQuery;
@@ -254,5 +257,38 @@ public class QueryUtils {
     }
 
     return Collections.emptyList();
+  }
+
+  /**
+   * Returns a Set containing all of the Queries possessing a tag in the provided list of desired
+   * tags. The Set uses reference equality.
+   */
+  public static Set<Query> getTaggedQueries(SolrQueryRequest req, Collection<String> desiredTags) {
+    Map tagMap = (Map) req.getContext().get("tags");
+
+    if (tagMap == null || tagMap.isEmpty() || desiredTags == null || desiredTags.isEmpty()) {
+      return Collections.emptySet();
+    }
+
+    Set<Query> taggedQueries = Collections.newSetFromMap(new IdentityHashMap<>());
+
+    for (String tagName : desiredTags) {
+      Object tagVal = tagMap.get(tagName);
+      if (!(tagVal instanceof Collection)) continue;
+      for (Object obj : (Collection<?>) tagVal) {
+        if (!(obj instanceof QParser)) continue;
+        QParser qParser = (QParser) obj;
+        Query query;
+        try {
+          query = qParser.getQuery();
+        } catch (SyntaxError syntaxError) {
+          // This should not happen since we should only be retrieving a previously parsed query
+          throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, syntaxError);
+        }
+        taggedQueries.add(query);
+      }
+    }
+
+    return taggedQueries;
   }
 }

@@ -24,6 +24,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.IntFunction;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.search.BooleanClause;
@@ -39,6 +40,7 @@ import org.apache.solr.search.BitDocSet;
 import org.apache.solr.search.DocIterator;
 import org.apache.solr.search.DocSet;
 import org.apache.solr.search.QParser;
+import org.apache.solr.search.QueryUtils;
 import org.apache.solr.search.SolrIndexSearcher;
 import org.apache.solr.search.SyntaxError;
 import org.apache.solr.search.facet.SlotAcc.SlotContext;
@@ -196,6 +198,12 @@ public abstract class FacetProcessor<T extends FacetRequest> {
       return;
     }
 
+    // TODO: refactoring option 1 -- static method in QueryUtils
+    Set excludeSetFContext = QueryUtils.getTaggedQueries(fcontext.req, excludeTags);
+
+    // TODO: refactoring option 2 -- default method on SolrQueryRequest
+    Set excludeSetReq = fcontext.req.getTaggedQueries(excludeTags);
+
     Map<?, ?> tagMap = (Map<?, ?>) fcontext.req.getContext().get("tags");
     if (tagMap == null) {
       // no filters were tagged
@@ -224,6 +232,12 @@ public abstract class FacetProcessor<T extends FacetRequest> {
 
     // TODO: somehow remove responsebuilder dependency
     ResponseBuilder rb = SolrRequestInfo.getRequestInfo().getResponseBuilder();
+
+    // TODO: refactoring option 3 -- method on ResponseBuilder
+    Set excludeSetRb = rb.getTaggedQueries(excludeTags);
+    // QUESTION 1: how significant is the comment above about wanting to remove the ResponseBuilder dependency?
+    // QUESTION 2: can we be sure rb.req == fcontext.req, or at least that
+    // rb.req.getContext().get("tags") will be populated the same way as fcontext.req.getContext().get("tags")
 
     // add the base query
     if (!excludeSet.containsKey(rb.getQuery())) {

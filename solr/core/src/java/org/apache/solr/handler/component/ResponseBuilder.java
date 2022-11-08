@@ -18,7 +18,9 @@ package org.apache.solr.handler.component;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -30,6 +32,7 @@ import org.apache.lucene.search.grouping.TopGroups;
 import org.apache.lucene.util.BytesRef;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
+import org.apache.solr.common.SolrException;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.request.SolrQueryRequest;
@@ -43,6 +46,7 @@ import org.apache.solr.search.QueryCommand;
 import org.apache.solr.search.QueryResult;
 import org.apache.solr.search.RankQuery;
 import org.apache.solr.search.SortSpec;
+import org.apache.solr.search.SyntaxError;
 import org.apache.solr.search.grouping.GroupingSpecification;
 import org.apache.solr.search.grouping.distributed.command.QueryCommandResult;
 import org.apache.solr.util.RTimer;
@@ -327,6 +331,39 @@ public class ResponseBuilder {
 
   public List<Query> getFilters() {
     return filters;
+  }
+
+  /**
+   * Returns a Set containing all of the Queries possessing a tag in the provided list of desired
+   * tags. The Set uses reference equality.
+   */
+  public Set<Query> getTaggedQueries(Collection<String> desiredTags) {
+    Map tagMap = (Map) req.getContext().get("tags");
+
+    if (tagMap == null || tagMap.isEmpty() || desiredTags == null || desiredTags.isEmpty()) {
+      return Collections.emptySet();
+    }
+
+    Set<Query> taggedQueries = Collections.newSetFromMap(new IdentityHashMap<>());
+
+    for (String tagName : desiredTags) {
+      Object tagVal = tagMap.get(tagName);
+      if (!(tagVal instanceof Collection)) continue;
+      for (Object obj : (Collection<?>) tagVal) {
+        if (!(obj instanceof QParser)) continue;
+        QParser qParser = (QParser) obj;
+        Query query;
+        try {
+          query = qParser.getQuery();
+        } catch (SyntaxError syntaxError) {
+          // This should not happen since we should only be retrieving a previously parsed query
+          throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, syntaxError);
+        }
+        taggedQueries.add(query);
+      }
+    }
+
+    return taggedQueries;
   }
 
   public void setFilters(List<Query> filters) {

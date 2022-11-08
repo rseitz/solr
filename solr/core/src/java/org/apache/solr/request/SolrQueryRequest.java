@@ -21,17 +21,24 @@ import io.opentracing.Tracer;
 import io.opentracing.noop.NoopSpan;
 import io.opentracing.util.GlobalTracer;
 import java.security.Principal;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import org.apache.lucene.search.Query;
 import org.apache.solr.cloud.CloudDescriptor;
+import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.CommandOperation;
 import org.apache.solr.common.util.ContentStream;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.schema.IndexSchema;
+import org.apache.solr.search.QParser;
 import org.apache.solr.search.SolrIndexSearcher;
+import org.apache.solr.search.SyntaxError;
 import org.apache.solr.servlet.HttpSolrCall;
 import org.apache.solr.util.RTimerTree;
 
@@ -160,5 +167,38 @@ public interface SolrQueryRequest extends AutoCloseable {
 
   default CloudDescriptor getCloudDescriptor() {
     return getCore().getCoreDescriptor().getCloudDescriptor();
+  }
+
+  /**
+   * Returns a Set containing all of the Queries possessing a tag in the provided list of desired
+   * tags. The Set uses reference equality.
+   */
+  default Set<Query> getTaggedQueries(Collection<String> desiredTags) {
+    Map tagMap = (Map) getContext().get("tags");
+
+    if (tagMap == null || tagMap.isEmpty() || desiredTags == null || desiredTags.isEmpty()) {
+      return Collections.emptySet();
+    }
+
+    Set<Query> taggedQueries = Collections.newSetFromMap(new IdentityHashMap<>());
+
+    for (String tagName : desiredTags) {
+      Object tagVal = tagMap.get(tagName);
+      if (!(tagVal instanceof Collection)) continue;
+      for (Object obj : (Collection<?>) tagVal) {
+        if (!(obj instanceof QParser)) continue;
+        QParser qParser = (QParser) obj;
+        Query query;
+        try {
+          query = qParser.getQuery();
+        } catch (SyntaxError syntaxError) {
+          // This should not happen since we should only be retrieving a previously parsed query
+          throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, syntaxError);
+        }
+        taggedQueries.add(query);
+      }
+    }
+
+    return taggedQueries;
   }
 }

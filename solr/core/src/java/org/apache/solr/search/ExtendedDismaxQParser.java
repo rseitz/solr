@@ -18,17 +18,9 @@ package org.apache.solr.search;
 
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Multimaps;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+
+import java.util.*;
+
 import org.apache.commons.lang3.StringUtils;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenFilterFactory;
@@ -40,14 +32,7 @@ import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.queries.function.valuesource.ProductFloatFunction;
 import org.apache.lucene.queries.function.valuesource.QueryValueSource;
 import org.apache.lucene.queries.spans.SpanQuery;
-import org.apache.lucene.search.BooleanClause;
-import org.apache.lucene.search.BooleanQuery;
-import org.apache.lucene.search.BoostQuery;
-import org.apache.lucene.search.DisjunctionMaxQuery;
-import org.apache.lucene.search.MatchAllDocsQuery;
-import org.apache.lucene.search.MultiPhraseQuery;
-import org.apache.lucene.search.PhraseQuery;
-import org.apache.lucene.search.Query;
+import org.apache.lucene.search.*;
 import org.apache.solr.analysis.TokenizerChain;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
@@ -1221,13 +1206,16 @@ public class ExtendedDismaxQParser extends QParser {
           if ((firstQuery instanceof BooleanQuery
                   || (firstQuery instanceof BoostQuery
                       && ((BoostQuery) firstQuery).getQuery() instanceof BooleanQuery))
-              && allSameQueryStructure(lst)) {
             BooleanQuery.Builder q = new BooleanQuery.Builder();
+            for (Integer key : keys) {
+              List<Query> queries = offsets.get(key);
+              q.add(
+                newBooleanClause(
+                  new DisjunctionMaxQuery(queries, a.tie), BooleanClause.Occur.SHOULD));
+            }
+
+            /*
             List<Query> subs = new ArrayList<>(lst.size());
-            BooleanQuery firstBooleanQuery =
-                firstQuery instanceof BoostQuery
-                    ? (BooleanQuery) ((BoostQuery) firstQuery).getQuery()
-                    : (BooleanQuery) firstQuery;
             for (int c = 0; c < firstBooleanQuery.clauses().size(); ++c) {
               subs.clear();
               // Make a dismax query for each clause position in the boolean per-field queries.
@@ -1245,7 +1233,8 @@ public class ExtendedDismaxQParser extends QParser {
               q.add(
                   newBooleanClause(
                       new DisjunctionMaxQuery(subs, a.tie), BooleanClause.Occur.SHOULD));
-            }
+            }*/
+
             return QueryUtils.build(q, parser);
           } else {
             return new DisjunctionMaxQuery(lst, a.tie);

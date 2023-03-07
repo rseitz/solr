@@ -186,11 +186,11 @@ apply from: file('gradle/ant-compat/misc.gradle')
 
 apply from: file('gradle/ant-compat/artifact-naming.gradle')
 
-apply from: file('gradle/documentation/pull-lucene-javadocs.gradle')
-apply from: file('gradle/documentation/documentation.gradle')
-apply from: file('gradle/documentation/changes-to-html.gradle')
-apply from: file('gradle/documentation/markdown.gradle')
-apply from: file('gradle/documentation/render-javadoc.gradle')
+//apply from: file('gradle/documentation/pull-lucene-javadocs.gradle')
+//apply from: file('gradle/documentation/documentation.gradle')
+//apply from: file('gradle/documentation/changes-to-html.gradle')
+//apply from: file('gradle/documentation/markdown.gradle')
+//apply from: file('gradle/documentation/render-javadoc.gradle')
 
 apply from: file('gradle/hacks/global-exclude-dependencies.gradle')
 apply from: file('gradle/hacks/gradle-archives.gradle')
@@ -207,5 +207,5 @@ apply from: file('gradle/ant-compat/solr.post-jar.gradle')
 
 apply from: file('gradle/node.gradle')
 
-sourceCompatibility = JavaVersion.VERSION_17
-targetCompatibility = JavaVersion.VERSION_17
+sourceCompatibility = JavaVersion.VERSION_16
+targetCompatibility = JavaVersion.VERSION_16

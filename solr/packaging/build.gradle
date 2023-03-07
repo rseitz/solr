@@ -58,7 +58,7 @@ dependencies {
   server project(path: ":solr:server", configuration: "packaging")
 
   // Copy files from documentation output
-  docs project(path: ':solr:documentation', configuration: 'minimalSite')
+  //docs project(path: ':solr:documentation', configuration: 'minimalSite')
 
   docker project(path: ':solr:docker', configuration: 'packaging')
 

@@ -1202,43 +1202,21 @@ public class ExtendedDismaxQParser extends QParser {
         // DisMaxQuery.rewrite() removes itself if there is just a single clause anyway.
         // if (lst.size()==1) return lst.get(0);
         if (makeDismax) {
+
+          if (allTermQueries(lst)) {
+            return QueryUtils.build(rewriteUsingStartOffset(lst, a.tie), parser);
+          }
+
           Query firstQuery = lst.get(0);
           if ((firstQuery instanceof BooleanQuery
                   || (firstQuery instanceof BoostQuery
                       && ((BoostQuery) firstQuery).getQuery() instanceof BooleanQuery))
-            BooleanQuery.Builder q = new BooleanQuery.Builder();
-            for (Integer key : keys) {
-              List<Query> queries = offsets.get(key);
-              q.add(
-                newBooleanClause(
-                  new DisjunctionMaxQuery(queries, a.tie), BooleanClause.Occur.SHOULD));
-            }
-
-            /*
-            List<Query> subs = new ArrayList<>(lst.size());
-            for (int c = 0; c < firstBooleanQuery.clauses().size(); ++c) {
-              subs.clear();
-              // Make a dismax query for each clause position in the boolean per-field queries.
-              for (int n = 0; n < lst.size(); ++n) {
-                if (lst.get(n) instanceof BoostQuery) {
-                  BoostQuery boostQuery = (BoostQuery) lst.get(n);
-                  BooleanQuery booleanQuery = (BooleanQuery) boostQuery.getQuery();
-                  subs.add(
-                      new BoostQuery(
-                          booleanQuery.clauses().get(c).getQuery(), boostQuery.getBoost()));
-                } else {
-                  subs.add(((BooleanQuery) lst.get(n)).clauses().get(c).getQuery());
-                }
-              }
-              q.add(
-                  newBooleanClause(
-                      new DisjunctionMaxQuery(subs, a.tie), BooleanClause.Occur.SHOULD));
-            }*/
-
-            return QueryUtils.build(q, parser);
-          } else {
-            return new DisjunctionMaxQuery(lst, a.tie);
+               && allSameQueryStructure(lst)) {
+            return QueryUtils.build(rewriteUsingClausePosition(lst, a.tie), parser);
           }
+
+          return new DisjunctionMaxQuery(lst, a.tie);
+
         } else {
           BooleanQuery.Builder q = new BooleanQuery.Builder();
           for (Query sub : lst) {
@@ -1259,6 +1237,97 @@ public class ExtendedDismaxQParser extends QParser {
         return getQuery();
       }
     }
+
+    private BooleanQuery.Builder rewriteUsingClausePosition(List<Query> lst, float tie) {
+      SortedMap<Integer, List<Query>> offsets = new TreeMap<>();
+
+      for (int n = 0; n < lst.size(); ++n) {
+        BooleanQuery bq = (BooleanQuery)lst.get(n);
+        List<BooleanClause> clauses = bq.clauses();
+
+        for (int c = 0; c < bq.clauses().size(); ++c) {
+          Query clause = clauses.get(c).getQuery();
+          Term t;
+
+          if (clause instanceof SynonymQuery) {
+            SynonymQuery sq = (SynonymQuery) clause;
+            t = sq.getTerms().get(0);
+          } else {
+            TermQuery tq = (TermQuery) clause;
+            t = tq.getTerm();
+          }
+
+          int offset = t.getStartOffset();
+
+          if (offsets.containsKey(offset)) {
+            offsets.get(offset).add(clause);
+          } else {
+            ArrayList<Query> myList = new ArrayList<>();
+            myList.add(clause);
+            offsets.put(offset, myList);
+          }
+        }
+      }
+
+      BooleanQuery.Builder q = new BooleanQuery.Builder();
+      Collection<Integer> keys = offsets.keySet();
+      for (Integer key : keys) {
+        List<Query> queries = offsets.get(key);
+        q.add(
+          newBooleanClause(
+            new DisjunctionMaxQuery(queries, tie), BooleanClause.Occur.SHOULD));
+      }
+      return q;
+    }
+
+    private BooleanQuery.Builder rewriteUsingStartOffset(List<Query> lst, float tie) {
+      Query firstQuery = lst.get(0);
+      List<Query> subs = new ArrayList<>(lst.size());
+      BooleanQuery firstBooleanQuery =
+        firstQuery instanceof BoostQuery
+          ? (BooleanQuery) ((BoostQuery) firstQuery).getQuery()
+          : (BooleanQuery) firstQuery;
+      BooleanQuery.Builder q = new BooleanQuery.Builder();
+      for (int c = 0; c < firstBooleanQuery.clauses().size(); ++c) {
+        subs.clear();
+        // Make a dismax query for each clause position in the boolean per-field queries.
+        for (int n = 0; n < lst.size(); ++n) {
+          if (lst.get(n) instanceof BoostQuery) {
+            BoostQuery boostQuery = (BoostQuery) lst.get(n);
+            BooleanQuery booleanQuery = (BooleanQuery) boostQuery.getQuery();
+            subs.add(
+                new BoostQuery(
+                    booleanQuery.clauses().get(c).getQuery(), boostQuery.getBoost()));
+          } else {
+            subs.add(((BooleanQuery) lst.get(n)).clauses().get(c).getQuery());
+          }
+        }
+        q.add(
+            newBooleanClause(
+                new DisjunctionMaxQuery(subs, tie), BooleanClause.Occur.SHOULD));
+      }
+      return q;
+    }
+
+
+    private boolean allTermQueries(List<Query> lst) {
+      for (Query q : lst) {
+        if (!(q instanceof BooleanQuery)) {
+          return false;
+        }
+        BooleanQuery bq = (BooleanQuery)q;
+        List<BooleanClause> clauses = bq.clauses();
+
+        for (BooleanClause clause : bq.clauses()) {
+          Query innerQuery = clause.getQuery();
+          if (!((innerQuery instanceof SynonymQuery) || (innerQuery instanceof TermQuery))) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
 
     /**
      * Recursively examines the given query list for identical structure in all queries. Boosts on

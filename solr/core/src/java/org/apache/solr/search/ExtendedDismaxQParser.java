@@ -1238,15 +1238,14 @@ public class ExtendedDismaxQParser extends QParser {
       }
     }
 
-    private BooleanQuery.Builder rewriteUsingClausePosition(List<Query> lst, float tie) {
+    private BooleanQuery.Builder rewriteUsingStartOffset(List<Query> lst, float tie) {
       SortedMap<Integer, List<Query>> offsets = new TreeMap<>();
 
-      for (int n = 0; n < lst.size(); ++n) {
-        BooleanQuery bq = (BooleanQuery)lst.get(n);
-        List<BooleanClause> clauses = bq.clauses();
+      for (Query q : lst) {
+        BooleanQuery bq = (BooleanQuery)q;
 
-        for (int c = 0; c < bq.clauses().size(); ++c) {
-          Query clause = clauses.get(c).getQuery();
+        for (BooleanClause bc : bq.clauses()) {
+          Query clause = bc.getQuery();
           Term t;
 
           if (clause instanceof SynonymQuery) {
@@ -1280,7 +1279,7 @@ public class ExtendedDismaxQParser extends QParser {
       return q;
     }
 
-    private BooleanQuery.Builder rewriteUsingStartOffset(List<Query> lst, float tie) {
+    private BooleanQuery.Builder rewriteUsingClausePosition(List<Query> lst, float tie) {
       Query firstQuery = lst.get(0);
       List<Query> subs = new ArrayList<>(lst.size());
       BooleanQuery firstBooleanQuery =
@@ -1316,9 +1315,11 @@ public class ExtendedDismaxQParser extends QParser {
           return false;
         }
         BooleanQuery bq = (BooleanQuery)q;
-        List<BooleanClause> clauses = bq.clauses();
 
         for (BooleanClause clause : bq.clauses()) {
+          if (clause.getOccur() != BooleanClause.Occur.SHOULD) {
+            return false; // TODO
+          }
           Query innerQuery = clause.getQuery();
           if (!((innerQuery instanceof SynonymQuery) || (innerQuery instanceof TermQuery))) {
             return false;
